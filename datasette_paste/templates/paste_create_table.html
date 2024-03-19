@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}Paste data to create a table{% endblock %}
+
+{% block extra_head %}
+<script src="/-/static-plugins/datasette-paste/papaparse-5-4-1.min.js"></script>
+<style>
+progress#progressBar {
+    width: 100%;
+    height: 20px;
+    background-color: #e0e0e0;
+    border: 1px solid #c0c0c0;
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+progress#progressBar::-webkit-progress-bar {
+    /* Background of the progress barfor Safari and Chrome */
+    background-color: #e0e0e0;
+    border-radius: 5px;
+}
+
+progress#progressBar::-webkit-progress-value {
+    /* Color of the progress bar for Safari and Chrome */
+    background-color: #147af0; /* Dark blue */
+    border-radius: 5px;
+}
+
+progress#progressBar::-moz-progress-bar {
+    /* Color of the progress bar for Firefox */
+    background-color: #147af0; /* Dark blue */
+    border-radius: 5px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>Paste data to create a table</h1>
+
+<p>Select a range of cells in Google Sheets / Excel / Numbers (or select-all), hit copy, then paste into this box to import that data and create a new table.</p>
+
+<form id="pasteForm" style="display: none">
+  <p>
+    <input type="hidden" name="csrftoken" value="{{ csrftoken() }}">
+    <label for="id_table_name">Table name:</label>
+    <input type="text" required name="table" id="id_table_name" value="" placeholder="Enter a new table name">
+  </p>
+  <p>Table will be created in <strong>{{ database }}</strong></p>
+  <p><label for="id_content">Paste data here:</label></p>
+  <p>
+    <textarea name="content" required id="id_content" style="width: 100%; height: 20em;" placeholder="Paste content here"></textarea>
+  </p>
+  <p>
+    <input type="submit" value="Upload rows to Datasette">
+  </p>
+  <p><progress id="progressBar" style="display: none" value="0" max="100"></progress></p>
+</form>
+
+<p id="requires-javascript">This feature requires JavaScript</p>
+
+<script>
+document.getElementById('requires-javascript').style.display = 'none';
+const progressBar = document.getElementById('progressBar');
+const form = document.getElementById('pasteForm')
+form.style.display = 'block';
+
+form.onsubmit = function(event) {
+  event.preventDefault();
+  const table = document.getElementById('id_table_name').value.trim();
+  if (!table) {
+    alert('Please enter a table name');
+    return;
+  }
+  const content = document.getElementById('id_content').value.trim();
+  if (!content) {
+    alert('Please paste some content');
+    return;
+  }
+  const parsed = Papa.parse(content, {header: true});
+  if (parsed.errors.length) {
+    alert('Error parsing content: ' + parsed.errors[0].message);
+    return;
+  }
+  const rows = parsed.data;
+  if (!rows.length) {
+    alert('No rows found in content');
+    return;
+  }
+  progressBar.style.display = 'block';
+  progressBar.value = 0;
+  progressBar.max = rows.length;
+  // Submit to API in batches of 100
+  const url = window.location.pathname.replace('/-/paste', '/-/create');
+  const csrftoken = document.querySelector('input[name="csrftoken"]').value;
+  const headers = new Headers();
+  headers.append('Content-Type', 'application/json');
+  headers.append('X-CSRFToken', csrftoken);
+  const batchSize = 100;
+  for (let i = 0; i < rows.length; i += batchSize) {
+    const batch = rows.slice(i, i + batchSize);
+    fetch(url, {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify({table: table, rows: batch})
+    }).then(response => {
+      if (!response.ok) {
+        throw new Error('Failed to upload rows: ' + response.statusText);
+      }
+      return response.json();
+    }).then(json => {
+      if (json.ok) {
+        progressBar.value += batch.length;
+        if (progressBar.value === progressBar.max) {
+          alert('Done');
+        }
+      } else {
+        alert('Error uploading rows: ' + json.error);
+      }
+    }).catch(error => {
+      alert('Error uploading rows: ' + error);
+    });
+  }
+};
+</script>
+
+{% endblock %}
