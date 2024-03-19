@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Paste Data Prototype</title>
+<style>
+body {
+  padding: 1em;
+  font-family: Helvetica, sans-serif;
+}
+.modes label {
+  padding-left: 1em;
+}
+table {
+  border-collapse: collapse;
+}
+
+th, td {
+  padding: 8px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+th {
+  background-color: #f2f2f2;
+}
+</style>
+</head>
+<body>
+<h1>Paste Data Prototype</h1>
+
+<p><label for="id_paste">Paste here</label></p>
+
+<p><textarea id="id_paste" style="width: 80%; height: 10em"></textarea></p>
+
+<p class="modes">Mode:
+  <label><input type="radio" name="id_treat_as" value="tsv"> TSV</label>
+  <label><input type="radio" name="id_treat_as" value="csv"> CSV</label>
+  <label><input type="radio" name="id_treat_as" value="html"> HTML</label>
+  <label><input type="radio" name="id_treat_as" value="json"> JSON</label>
+  <label><input type="radio" name="id_treat_as" value="regex"> Regular expression</label>
+</p>
+
+<div id="preview"></div>
+
+<pre id="debug"></pre>
+
+<script>
+const ta = document.querySelector('#id_paste');
+const debug = document.querySelector('#debug');
+const preview = document.querySelector('#preview');
+
+let lastValue = '';
+function updated() {
+  if (lastValue != ta.value) {
+    lastValue = ta.value;
+    window.value = ta.value;
+    let rows = parseTSV(lastValue);
+    // let rows = getTableRows(lastValue);
+    window.rows = rows;
+    // debug.innerText = JSON.stringify(rows, null, 4);
+    preview.innerHTML = `<p>${rows.length} rows</p>`;
+    preview.append(createTableFromObjects(rows));
+  }
+}
+
+function getTableRows(html) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  const tables = doc.getElementsByTagName('table');
+  if (tables.length === 0) return [];
+  const table = tables[0];
+  const columns = Array.from(table.querySelectorAll('th')).map(el => el.innerText.trim());
+  // Get the rows with no <th> elements
+  const rowTrs = Array.from(table.querySelectorAll('tr')).filter(tr => !tr.querySelector('th'));
+  return rowTrs.map(tr => {
+    return Object.fromEntries(Array.from(tr.querySelectorAll('td')).map((td, index) => [columns[index], td.innerText.trim()])) 
+  });
+}
+
+
+function parseTSV(value) {
+  const lines = value.split(/\n/g);
+  const headers = lines[0].split(/\t/g).map(s => s.trim());
+  const dataRows = lines.slice(1);
+  return dataRows.map(row => {
+    const bits = row.split(/\t/g);
+    const result = {};
+    for (let i = 0; i < headers.length; i++) {
+      result[headers[i]] = bits[i];
+    }
+    return result;
+  });
+}
+
+function createTableFromObjects(rows) {
+  const table = document.createElement('table');
+  // Create header row
+  const headerRow = table.insertRow();
+  Object.entries(rows[0]).forEach(([key, value]) => {
+    const th = document.createElement('th');
+    th.innerHTML = `${key} <span style="font-weight: normal">[<a href="#">rename</a >]</span>
+      <p style="margin-top: 0.4em; margin-bottom: 0; font-size: 0.7em;">
+        Type <select><option>Text</option>
+        <option>Integer</option>
+        <option>Float</option></select>
+      </span>
+    `;
+    headerRow.appendChild(th);
+  });
+
+  // Create data rows
+  for (let i = 0; i < Math.max(1000, rows.length); i++) {
+    const tr = table.insertRow();
+    const row = rows[i];
+    Object.entries(row).forEach(([key, value]) => {
+      const td = document.createElement('td');
+      td.textContent = value;
+      tr.appendChild(td);
+    });
+  }
+  return table;
+}
+
+function rateLimiter(fn, delay) {
+  let timeout;
+  return (...args) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => {
+      fn.apply(this, args);
+    }, delay);
+  };
+}
+
+const limited = rateLimiter(updated, 1000);
+
+ta.addEventListener('change', limited);
+ta.addEventListener('keyup', limited);
+limited();
+</script>
+</body>
+</html>
