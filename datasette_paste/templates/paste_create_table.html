@@ -31,6 +31,9 @@ progress#progressBar::-moz-progress-bar {
     background-color: #147af0; /* Dark blue */
     border-radius: 5px;
 }
+form input:invalid {
+    border: 1px solid red;
+}
 </style>
 {% endblock %}
 
@@ -50,7 +53,7 @@ progress#progressBar::-moz-progress-bar {
   <p>
     <textarea name="content" required id="id_content" style="width: 100%; height: 20em;" placeholder="Paste content here"></textarea>
   </p>
-  <p>
+  <p id="submitRows">
     <input type="submit" value="Upload rows to Datasette">
   </p>
   <p><progress id="progressBar" style="display: none" value="0" max="100"></progress></p>
@@ -62,7 +65,65 @@ progress#progressBar::-moz-progress-bar {
 document.getElementById('requires-javascript').style.display = 'none';
 const progressBar = document.getElementById('progressBar');
 const form = document.getElementById('pasteForm')
+const submitP = document.getElementById('submitRows');
+const contentTa = document.getElementById('id_content');
+const tableNameInput = document.getElementById('id_table_name');
+submitP.style.display = 'none';
 form.style.display = 'block';
+
+let currentRows = [];
+
+function rateLimiter(fn, delay) {
+  let timeout;
+  return (...args) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => {
+      fn.apply(this, args);
+    }, delay);
+  };
+}
+
+function checkTableName() {
+  const table = tableNameInput.value.trim();
+  if (!table) {
+    return;
+  }
+  // API is /content/$table_name.json?_size=0 - if it returns ok: false then the table name is available
+  fetch(`/content/${table}.json?_size=0`).then(response => {
+    return response.json();
+  }).then(json => {
+    if (json.ok === true) {
+      tableNameInput.setCustomValidity('A table with that name already exists');
+    } else {
+      tableNameInput.setCustomValidity('');
+    }
+  });
+}
+
+// Check if table already exists when table name changes
+tableNameInput.addEventListener('keyup', rateLimiter(checkTableName, 1000));
+checkTableName();
+
+function updated() {
+  const content = document.getElementById('id_content').value.trim();
+  const table = document.getElementById('id_table_name').value.trim();
+  if (content && table) {
+    currentRows = Papa.parse(content, {header: true}).data;
+    if (currentRows.length) {
+      submitP.style.display = 'block';
+      // Show currenTRows.length with comma separators:
+      submitP.querySelector('input').value = `Upload ${currentRows.length.toLocaleString()} row${currentRows.length === 1 ? '' : 's'} to Datasette`;
+    }
+  } else {
+    submitP.style.display = 'none';
+  }
+}
+
+const limited = rateLimiter(updated, 1000);
+
+contentTa.addEventListener('change', limited);
+contentTa.addEventListener('keyup', limited);
+limited();
 
 form.onsubmit = function(event) {
   event.preventDefault();
@@ -76,19 +137,13 @@ form.onsubmit = function(event) {
     alert('Please paste some content');
     return;
   }
-  const parsed = Papa.parse(content, {header: true});
-  if (parsed.errors.length) {
-    alert('Error parsing content: ' + parsed.errors[0].message);
-    return;
-  }
-  const rows = parsed.data;
-  if (!rows.length) {
+  if (!currentRows.length) {
     alert('No rows found in content');
     return;
   }
   progressBar.style.display = 'block';
   progressBar.value = 0;
-  progressBar.max = rows.length;
+  progressBar.max = currentRows.length;
   // Submit to API in batches of 100
   const url = window.location.pathname.replace('/-/paste', '/-/create');
   const csrftoken = document.querySelector('input[name="csrftoken"]').value;
@@ -96,8 +151,8 @@ form.onsubmit = function(event) {
   headers.append('Content-Type', 'application/json');
   headers.append('X-CSRFToken', csrftoken);
   const batchSize = 100;
-  for (let i = 0; i < rows.length; i += batchSize) {
-    const batch = rows.slice(i, i + batchSize);
+  for (let i = 0; i < currentRows.length; i += batchSize) {
+    const batch = currentRows.slice(i, i + batchSize);
     fetch(url, {
       method: 'POST',
       headers: headers,
@@ -111,7 +166,7 @@ form.onsubmit = function(event) {
       if (json.ok) {
         progressBar.value += batch.length;
         if (progressBar.value === progressBar.max) {
-          alert('Done');
+          window.location = json.table_url;
         }
       } else {
         alert('Error uploading rows: ' + json.error);

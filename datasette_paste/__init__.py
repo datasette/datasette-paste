@@ -3,9 +3,13 @@ from datasette import hookimpl, Response
 
 async def paste_create_table(datasette, request):
     return Response.html(
-        await datasette.render_template("paste_create_table.html", {
-            "database": request.url_vars["database"],
-        }, request=request)
+        await datasette.render_template(
+            "paste_create_table.html",
+            {
+                "database": request.url_vars["database"],
+            },
+            request=request,
+        )
     )
 
 
@@ -30,7 +34,6 @@ def database_actions(datasette, actor, database):
         ]
 
     return inner
-
 
 
 async def can_paste(datasette, actor, database_name, to_table=None):
