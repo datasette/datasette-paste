@@ -1,12 +1,18 @@
-from datasette import hookimpl, Response
+from datasette import hookimpl, Response, Forbidden
 
 
 async def paste_create_table(datasette, request):
+    database = request.url_vars["database"]
+    if not await can_paste(datasette, request.actor, database):
+        raise Forbidden("Permission denied to import data")
     return Response.html(
         await datasette.render_template(
             "paste_create_table.html",
             {
-                "database": request.url_vars["database"],
+                "database": database,
+                "papaparse_url": datasette.urls.static_plugins(
+                    "datasette-paste", "papaparse-5-4-1.min.js"
+                ),
             },
             request=request,
         )
