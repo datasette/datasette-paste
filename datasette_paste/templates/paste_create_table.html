@@ -50,7 +50,6 @@ form input:invalid {
 
 <form id="pasteForm" style="display: none">
   <p>
-    <input type="hidden" name="csrftoken" value="{{ csrftoken() }}">
     <label for="id_table_name">Table name:</label>
     <input type="text" required name="table" id="id_table_name" value="" placeholder="Enter a new table name">
   </p>
@@ -267,10 +266,8 @@ form.onsubmit = function(event) {
   progressBar.max = currentRows.length;
   // Submit to API in batches of 100
   const url = window.location.pathname.replace('/-/paste', '/-/create');
-  const csrftoken = document.querySelector('input[name="csrftoken"]').value;
   const headers = new Headers();
   headers.append('Content-Type', 'application/json');
-  headers.append('X-CSRFToken', csrftoken);
   const batchSize = 100;
   for (let i = 0; i < currentRows.length; i += batchSize) {
     const batch = currentRows.slice(i, i + batchSize);
