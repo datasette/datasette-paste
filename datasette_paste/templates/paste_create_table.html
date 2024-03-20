@@ -140,7 +140,13 @@ function updated() {
   const content = document.getElementById('id_content').value.trim();
   const table = document.getElementById('id_table_name').value.trim();
   if (content && table) {
-    currentRows = Papa.parse(content, {header: true}).data;
+    // First try to treat it as JSON, if not then assume CSV/TSV
+    let fromJson = parseJsonArray(content);
+    if (fromJson) {
+      currentRows = fromJson;
+    } else {
+      currentRows = Papa.parse(content, {header: true}).data;
+    }
     if (currentRows.length) {
       submitP.style.display = 'block';
       submitP.querySelector('input').value = `Upload ${currentRows.length.toLocaleString()} row${currentRows.length === 1 ? '' : 's'} to Datasette`;
@@ -223,6 +229,37 @@ form.onsubmit = function(event) {
     });
   }
 };
+
+function parseJsonArray(string) {
+  // 1. Check for the first non-whitespace character
+  const firstChar = string.trim()[0];
+  if (firstChar !== '{' && firstChar !== '[') {
+    return null;
+  }
+  // 2. Attempt to parse the string as JSON
+  let json;
+  try {
+    json = JSON.parse(string);
+  } catch (error) {
+    return null;
+  }
+  // 3. Check if the JSON is an array of objects
+  if (Array.isArray(json) && json.every(item => typeof item === 'object' && item !== null)) {
+    return json;
+  }
+  // 4. Check if it's an object with array of objects as values
+  if (typeof json === 'object' && json !== null) {
+    let largestArray = [];
+    for (const key in json) {
+      if (Array.isArray(json[key]) && json[key].length > largestArray.length && json[key].every(item => typeof item === 'object' && item !== null)) {
+        largestArray = json[key];
+      }
+    }
+    return largestArray.length > 0 ? largestArray : null;
+  }
+  return null;
+}
+
 </script>
 
 {% endblock %}
