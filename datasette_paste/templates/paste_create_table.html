@@ -55,7 +55,7 @@ form input:invalid {
     <input type="text" required name="table" id="id_table_name" value="" placeholder="Enter a new table name">
   </p>
   <p>Table will be created in <strong>{{ database }}</strong></p>
-  <p><label for="id_content">Paste data here:</label></p>
+  <p><label for="id_content">Paste data here:</label> <span id="pasteLoading"></span></p>
   <p>
     <textarea name="content" required id="id_content" style="width: 100%; height: 20em;" placeholder="Paste content here"></textarea>
   </p>
@@ -70,6 +70,59 @@ form input:invalid {
 <p id="requires-javascript">This feature requires JavaScript</p>
 
 <script>
+const loadingSvg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 100 100"
+  style="width: 30px; height: 30px; position: relative; top: 10px; ">
+<g transform="rotate(0 50 50)">
+  <rect x="47" y="24" rx="3" ry="6" width="6" height="12" fill="#292664">
+    <animate attributeName="opacity" values="1;0" keyTimes="0;1" dur="1s" begin="-0.9166666666666666s" repeatCount="indefinite"></animate>
+  </rect>
+</g><g transform="rotate(30 50 50)">
+  <rect x="47" y="24" rx="3" ry="6" width="6" height="12" fill="#292664">
+    <animate attributeName="opacity" values="1;0" keyTimes="0;1" dur="1s" begin="-0.8333333333333334s" repeatCount="indefinite"></animate>
+  </rect>
+</g><g transform="rotate(60 50 50)">
+  <rect x="47" y="24" rx="3" ry="6" width="6" height="12" fill="#292664">
+    <animate attributeName="opacity" values="1;0" keyTimes="0;1" dur="1s" begin="-0.75s" repeatCount="indefinite"></animate>
+  </rect>
+</g><g transform="rotate(90 50 50)">
+  <rect x="47" y="24" rx="3" ry="6" width="6" height="12" fill="#292664">
+    <animate attributeName="opacity" values="1;0" keyTimes="0;1" dur="1s" begin="-0.6666666666666666s" repeatCount="indefinite"></animate>
+  </rect>
+</g><g transform="rotate(120 50 50)">
+  <rect x="47" y="24" rx="3" ry="6" width="6" height="12" fill="#292664">
+    <animate attributeName="opacity" values="1;0" keyTimes="0;1" dur="1s" begin="-0.5833333333333334s" repeatCount="indefinite"></animate>
+  </rect>
+</g><g transform="rotate(150 50 50)">
+  <rect x="47" y="24" rx="3" ry="6" width="6" height="12" fill="#292664">
+    <animate attributeName="opacity" values="1;0" keyTimes="0;1" dur="1s" begin="-0.5s" repeatCount="indefinite"></animate>
+  </rect>
+</g><g transform="rotate(180 50 50)">
+  <rect x="47" y="24" rx="3" ry="6" width="6" height="12" fill="#292664">
+    <animate attributeName="opacity" values="1;0" keyTimes="0;1" dur="1s" begin="-0.4166666666666667s" repeatCount="indefinite"></animate>
+  </rect>
+</g><g transform="rotate(210 50 50)">
+  <rect x="47" y="24" rx="3" ry="6" width="6" height="12" fill="#292664">
+    <animate attributeName="opacity" values="1;0" keyTimes="0;1" dur="1s" begin="-0.3333333333333333s" repeatCount="indefinite"></animate>
+  </rect>
+</g><g transform="rotate(240 50 50)">
+  <rect x="47" y="24" rx="3" ry="6" width="6" height="12" fill="#292664">
+    <animate attributeName="opacity" values="1;0" keyTimes="0;1" dur="1s" begin="-0.25s" repeatCount="indefinite"></animate>
+  </rect>
+</g><g transform="rotate(270 50 50)">
+  <rect x="47" y="24" rx="3" ry="6" width="6" height="12" fill="#292664">
+    <animate attributeName="opacity" values="1;0" keyTimes="0;1" dur="1s" begin="-0.16666666666666666s" repeatCount="indefinite"></animate>
+  </rect>
+</g><g transform="rotate(300 50 50)">
+  <rect x="47" y="24" rx="3" ry="6" width="6" height="12" fill="#292664">
+    <animate attributeName="opacity" values="1;0" keyTimes="0;1" dur="1s" begin="-0.08333333333333333s" repeatCount="indefinite"></animate>
+  </rect>
+</g><g transform="rotate(330 50 50)">
+  <rect x="47" y="24" rx="3" ry="6" width="6" height="12" fill="#292664">
+    <animate attributeName="opacity" values="1;0" keyTimes="0;1" dur="1s" begin="0s" repeatCount="indefinite"></animate>
+  </rect>
+</g>
+</svg>`;
+
 document.getElementById('requires-javascript').style.display = 'none';
 const progressBar = document.getElementById('progressBar');
 const form = document.getElementById('pasteForm')
@@ -77,6 +130,9 @@ const submitP = document.getElementById('submitRows');
 const contentTa = document.getElementById('id_content');
 const tableNameInput = document.getElementById('id_table_name');
 const tablePreviewDiv = document.getElementById('tablePreview');
+const pasteLoading = document.getElementById('pasteLoading');
+pasteLoading.style.visibility = 'hidden';
+pasteLoading.innerHTML = loadingSvg;
 submitP.style.display = 'none';
 form.style.display = 'block';
 
@@ -136,39 +192,46 @@ function createTableFromObjects(rows) {
 tableNameInput.addEventListener('keyup', rateLimiter(checkTableName, 1000));
 checkTableName();
 
+let previousContent = '';
+
 function updated() {
   const content = document.getElementById('id_content').value.trim();
-  const table = document.getElementById('id_table_name').value.trim();
-  if (content && table) {
+  if (content != previousContent) {
+    previousContent = content;
     // First try to treat it as JSON, if not then assume CSV/TSV
     let fromJson = parseJsonArray(content);
     if (fromJson) {
       currentRows = fromJson;
     } else {
-      currentRows = Papa.parse(content, {header: true}).data;
+      pasteLoading.style.visibility = 'visible';
+      Papa.parse(content, {
+        header: true,
+        worker: true,
+        complete: function(results) {
+          pasteLoading.style.visibility = 'hidden';
+          currentRows = results.data;
+          if (currentRows.length) {
+            submitP.style.display = 'block';
+            submitP.querySelector('input').value = `Upload ${currentRows.length.toLocaleString()} row${currentRows.length === 1 ? '' : 's'} to Datasette`;
+            // Show preview of first 100 rows
+            const previewSlice = currentRows.slice(0, 100);
+            const table = createTableFromObjects(previewSlice);
+            let title = `Previewing ${previewSlice.length.toLocaleString()} row${previewSlice.length === 1 ? '' : 's'}`;
+            if (previewSlice.length < currentRows.length) {
+              title += ` (of ${currentRows.length.toLocaleString()})`;
+            }
+            tablePreviewDiv.innerHTML = `<h3>${title}</h3>`;
+            const tableWrapper = document.createElement('div');
+            tableWrapper.className = 'table-wrapper';
+            tableWrapper.appendChild(table);
+            tablePreviewDiv.appendChild(tableWrapper);
+          } else {
+            submitP.style.display = 'none';
+            tablePreviewDiv.innerHTML = '';
+          }
+        }
+      });
     }
-    if (currentRows.length) {
-      submitP.style.display = 'block';
-      submitP.querySelector('input').value = `Upload ${currentRows.length.toLocaleString()} row${currentRows.length === 1 ? '' : 's'} to Datasette`;
-      // Show preview of first 100 rows
-      const previewSlice = currentRows.slice(0, 100);
-      const table = createTableFromObjects(previewSlice);
-      let title = `Previewing ${previewSlice.length.toLocaleString()} row${previewSlice.length === 1 ? '' : 's'}`;
-      if (previewSlice.length < currentRows.length) {
-        title += ` (of ${currentRows.length.toLocaleString()})`;
-      }
-      tablePreviewDiv.innerHTML = `<h3>${title}</h3>`;
-      const tableWrapper = document.createElement('div');
-      tableWrapper.className = 'table-wrapper';
-      tableWrapper.appendChild(table);
-      tablePreviewDiv.appendChild(tableWrapper);
-    } else {
-      submitP.style.display = 'none';
-      tablePreviewDiv.innerHTML = '';
-    }
-  } else {
-    submitP.style.display = 'none';
-    tablePreviewDiv.innerHTML = '';
   }
 }
 
@@ -259,7 +322,6 @@ function parseJsonArray(string) {
   }
   return null;
 }
-
 </script>
 
 {% endblock %}
