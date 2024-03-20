@@ -245,6 +245,43 @@ contentTa.addEventListener('change', limited);
 contentTa.addEventListener('keyup', limited);
 limited();
 
+const batchSize = 100;
+const numParallel = 5;
+
+async function uploadRows(rows, url, headers, table, progressBar) {
+  let activeRequests = 0;
+  for (let i = 0; i < rows.length; i += batchSize) {
+    const batch = rows.slice(i, i + batchSize);
+    while (activeRequests >= numParallel) {
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+    activeRequests++;
+    fetch(url, {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify({table: table, rows: batch})
+    }).then(response => {
+      activeRequests--;
+      if (!response.ok) {
+        throw new Error('Failed to upload rows: ' + response.statusText);
+      }
+      return response.json();
+    }).then(json => {
+      if (json.ok) {
+        progressBar.value += batch.length;
+        if (progressBar.value === progressBar.max) {
+          window.location = json.table_url;
+        }
+      } else {
+        alert('Error uploading rows: ' + json.error);
+      }
+    }).catch(error => {
+      activeRequests--;
+      alert('Error uploading rows: ' + error);
+    });
+  }
+}
+
 form.onsubmit = function(event) {
   event.preventDefault();
   const table = document.getElementById('id_table_name').value.trim();
@@ -264,35 +301,11 @@ form.onsubmit = function(event) {
   progressBar.style.display = 'block';
   progressBar.value = 0;
   progressBar.max = currentRows.length;
-  // Submit to API in batches of 100
+  // Submit to API in batches
   const url = window.location.pathname.replace('/-/paste', '/-/create');
   const headers = new Headers();
   headers.append('Content-Type', 'application/json');
-  const batchSize = 100;
-  for (let i = 0; i < currentRows.length; i += batchSize) {
-    const batch = currentRows.slice(i, i + batchSize);
-    fetch(url, {
-      method: 'POST',
-      headers: headers,
-      body: JSON.stringify({table: table, rows: batch})
-    }).then(response => {
-      if (!response.ok) {
-        throw new Error('Failed to upload rows: ' + response.statusText);
-      }
-      return response.json();
-    }).then(json => {
-      if (json.ok) {
-        progressBar.value += batch.length;
-        if (progressBar.value === progressBar.max) {
-          window.location = json.table_url;
-        }
-      } else {
-        alert('Error uploading rows: ' + json.error);
-      }
-    }).catch(error => {
-      alert('Error uploading rows: ' + error);
-    });
-  }
+  uploadRows(currentRows, url, headers, table, progressBar);
 };
 
 function parseJsonArray(string) {
