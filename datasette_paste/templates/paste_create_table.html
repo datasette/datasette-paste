@@ -194,6 +194,28 @@ checkTableName();
 
 let previousContent = '';
 
+function handleResults(rows) {
+  if (rows.length) {
+    submitP.style.display = 'block';
+    submitP.querySelector('input').value = `Upload ${rows.length.toLocaleString()} row${rows.length === 1 ? '' : 's'} to Datasette`;
+    // Show preview of first 100 rows
+    const previewSlice = rows.slice(0, 100);
+    const table = createTableFromObjects(previewSlice);
+    let title = `Previewing ${previewSlice.length.toLocaleString()} row${previewSlice.length === 1 ? '' : 's'}`;
+    if (previewSlice.length < rows.length) {
+      title += ` (of ${rows.length.toLocaleString()})`;
+    }
+    tablePreviewDiv.innerHTML = `<h3>${title}</h3>`;
+    const tableWrapper = document.createElement('div');
+    tableWrapper.className = 'table-wrapper';
+    tableWrapper.appendChild(table);
+    tablePreviewDiv.appendChild(tableWrapper);
+  } else {
+    submitP.style.display = 'none';
+    tablePreviewDiv.innerHTML = '';
+  }
+}
+
 function updated() {
   const content = document.getElementById('id_content').value.trim();
   if (content != previousContent) {
@@ -202,6 +224,7 @@ function updated() {
     let fromJson = parseJsonArray(content);
     if (fromJson) {
       currentRows = fromJson;
+      handleResults(currentRows);
     } else {
       pasteLoading.style.visibility = 'visible';
       Papa.parse(content, {
@@ -210,25 +233,7 @@ function updated() {
         complete: function(results) {
           pasteLoading.style.visibility = 'hidden';
           currentRows = results.data;
-          if (currentRows.length) {
-            submitP.style.display = 'block';
-            submitP.querySelector('input').value = `Upload ${currentRows.length.toLocaleString()} row${currentRows.length === 1 ? '' : 's'} to Datasette`;
-            // Show preview of first 100 rows
-            const previewSlice = currentRows.slice(0, 100);
-            const table = createTableFromObjects(previewSlice);
-            let title = `Previewing ${previewSlice.length.toLocaleString()} row${previewSlice.length === 1 ? '' : 's'}`;
-            if (previewSlice.length < currentRows.length) {
-              title += ` (of ${currentRows.length.toLocaleString()})`;
-            }
-            tablePreviewDiv.innerHTML = `<h3>${title}</h3>`;
-            const tableWrapper = document.createElement('div');
-            tableWrapper.className = 'table-wrapper';
-            tableWrapper.appendChild(table);
-            tablePreviewDiv.appendChild(tableWrapper);
-          } else {
-            submitP.style.display = 'none';
-            tablePreviewDiv.innerHTML = '';
-          }
+          handleResults(currentRows);
         }
       });
     }
