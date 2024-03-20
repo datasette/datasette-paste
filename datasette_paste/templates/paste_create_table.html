@@ -34,6 +34,12 @@ progress#progressBar::-moz-progress-bar {
 form input:invalid {
     border: 1px solid red;
 }
+#tablePreview .table-wrapper {
+    overflow: auto;
+}
+#tablePreview th {
+  font-weight: bold;
+}
 </style>
 {% endblock %}
 
@@ -59,6 +65,8 @@ form input:invalid {
   <p><progress id="progressBar" style="display: none" value="0" max="100"></progress></p>
 </form>
 
+<div id="tablePreview"></div>
+
 <p id="requires-javascript">This feature requires JavaScript</p>
 
 <script>
@@ -68,6 +76,7 @@ const form = document.getElementById('pasteForm')
 const submitP = document.getElementById('submitRows');
 const contentTa = document.getElementById('id_content');
 const tableNameInput = document.getElementById('id_table_name');
+const tablePreviewDiv = document.getElementById('tablePreview');
 submitP.style.display = 'none';
 form.style.display = 'block';
 
@@ -100,6 +109,29 @@ function checkTableName() {
   });
 }
 
+function createTableFromObjects(rows) {
+  const table = document.createElement('table');
+  // Create header row
+  const headerRow = table.insertRow();
+  Object.entries(rows[0]).forEach(([key, value]) => {
+    const th = document.createElement('th');
+    th.innerText = key;
+    headerRow.appendChild(th);
+  });
+
+  // Create data rows
+  for (let i = 0; i < rows.length; i++) {
+    const tr = table.insertRow();
+    const row = rows[i];
+    Object.entries(row).forEach(([key, value]) => {
+      const td = document.createElement('td');
+      td.textContent = value;
+      tr.appendChild(td);
+    });
+  }
+  return table;
+}
+
 // Check if table already exists when table name changes
 tableNameInput.addEventListener('keyup', rateLimiter(checkTableName, 1000));
 checkTableName();
@@ -111,11 +143,26 @@ function updated() {
     currentRows = Papa.parse(content, {header: true}).data;
     if (currentRows.length) {
       submitP.style.display = 'block';
-      // Show currenTRows.length with comma separators:
       submitP.querySelector('input').value = `Upload ${currentRows.length.toLocaleString()} row${currentRows.length === 1 ? '' : 's'} to Datasette`;
+      // Show preview of first 100 rows
+      const previewSlice = currentRows.slice(0, 100);
+      const table = createTableFromObjects(previewSlice);
+      let title = `Previewing ${previewSlice.length.toLocaleString()} row${previewSlice.length === 1 ? '' : 's'}`;
+      if (previewSlice.length < currentRows.length) {
+        title += ` (of ${currentRows.length.toLocaleString()})`;
+      }
+      tablePreviewDiv.innerHTML = `<h3>${title}</h3>`;
+      const tableWrapper = document.createElement('div');
+      tableWrapper.className = 'table-wrapper';
+      tableWrapper.appendChild(table);
+      tablePreviewDiv.appendChild(tableWrapper);
+    } else {
+      submitP.style.display = 'none';
+      tablePreviewDiv.innerHTML = '';
     }
   } else {
     submitP.style.display = 'none';
+    tablePreviewDiv.innerHTML = '';
   }
 }
 
