@@ -337,6 +337,55 @@ function parseJsonArray(string) {
   }
   return null;
 }
+
+function setupTextareaWithFileInput(textarea) {
+  function readFileAndUpdateTextarea(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      textarea.value = e.target.result;
+      limited();
+    };
+    reader.readAsText(file);
+  }
+
+  // Create a file input element
+  const fileInput = document.createElement('input');
+  fileInput.type = 'file';
+  fileInput.style.display = 'block';
+  fileInput.addEventListener('change', (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      readFileAndUpdateTextarea(file);
+    }
+  });
+
+  // Wrap the file input in a paragraph and insert it after the textarea
+  const paragraph = document.createElement('p');
+  paragraph.appendChild(fileInput);
+  textarea.parentNode.insertBefore(paragraph, textarea.nextSibling);
+
+  // Set up the textarea as a drop target
+  textarea.addEventListener('dragover', (event) => {
+    event.preventDefault();
+    textarea.style.backgroundColor = 'lightblue';
+  });
+
+  textarea.addEventListener('dragleave', (event) => {
+    event.preventDefault();
+    textarea.style.backgroundColor = '';
+  });
+
+  textarea.addEventListener('drop', (event) => {
+    event.preventDefault();
+    textarea.style.backgroundColor = '';
+    const file = event.dataTransfer.files[0];
+    if (file) {
+      readFileAndUpdateTextarea(file);
+    }
+  });
+}
+
+setupTextareaWithFileInput(contentTa);
 </script>
 
 {% endblock %}
