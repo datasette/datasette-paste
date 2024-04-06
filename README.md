@@ -7,6 +7,8 @@
 
 Paste data to create tables in Datasette
 
+**This plugin is no longer being developed.** It has been replaced by [datasette-import](https://github.com/datasette/datasette-import).
+
 ## Installation
 
 Install this plugin in the same environment as Datasette.
